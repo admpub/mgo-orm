@@ -5,7 +5,7 @@ package controllers
 
 import (
 	"fmt"
-	"github.com/gronpipmaster/mgodb"
+	"github.com/admpub/mgo-orm"
 	"github.com/robfig/revel"
 	"net/url"
 	"time"
@@ -16,10 +16,9 @@ func init() {
 }
 
 func AppStart() {
-	var dbm *mgodb.Dbm
 	var err error
 	connectUrl, dbName, timeout := getConnectUrlDb()
-	err = dbm.Init(connectUrl, dbName, timeout)
+	err = mgodb.Connect(connectUrl, dbName, timeout)
 	if err != nil {
 		revel.ERROR.Fatal(err)
 	}

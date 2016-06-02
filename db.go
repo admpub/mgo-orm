@@ -13,29 +13,33 @@ import (
 var (
 	zeroVal     reflect.Value
 	zeroArgs    []reflect.Value
-	DbmInstance *Dbm
+	DbmInstance *Dbm = &Dbm{}
 	Debug       bool
 )
 
-type Dbm struct {
-	Database *mgo.Database
+func Connect(connectUrl string, dbName string, timeout time.Duration) error {
+	return DbmInstance.Init(connectUrl, dbName, timeout)
 }
 
-func (self *Dbm) GetInstance() *Dbm {
-	return DbmInstance
+type Dbm struct {
+	Database *mgo.Database
+	session  *mgo.Session
 }
 
 func (self *Dbm) Init(connectUrl string, dbName string, timeout time.Duration) error {
 	var err error
-	var session *mgo.Session
-	DbmInstance = &Dbm{}
-	session, err = mgo.DialWithTimeout(connectUrl, timeout*time.Second)
+	self.session, err = mgo.DialWithTimeout(connectUrl, timeout*time.Second)
 	if err != nil {
 		return errors.New(fmt.Sprintf("Could not connect to %s: %s.", connectUrl, err.Error()))
 	}
-	session.SetMode(mgo.Monotonic, true)
-	DbmInstance.Database = session.DB(dbName)
+	self.session.SetMode(mgo.Monotonic, true)
+	self.Database = self.session.DB(dbName)
 	return nil
+}
+
+func (self *Dbm) SwitchDB(dbName string) *Dbm {
+	self.Database = self.session.DB(dbName)
+	return self
 }
 
 func (self *Dbm) Find(collectionName string, query interface{}) *mgo.Query {

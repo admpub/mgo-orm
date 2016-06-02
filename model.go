@@ -17,7 +17,7 @@ type Query struct {
 
 var (
 	SortedDesc string = "-"
-	SortedAsk  string = ""
+	SortedAsc  string = ""
 )
 
 // Example:
@@ -44,6 +44,19 @@ type Model struct {
 	isNew          bool
 	//Crutch for success encoding gob
 	Tmp *bool `bson:"-" json:"-" xml:"-"`
+	dbm *Dbm
+}
+
+func (self *Model) Dbm() *Dbm {
+	if self.dbm != nil {
+		return self.dbm
+	}
+	return DbmInstance
+}
+
+func (self *Model) SetDbm(dbm *Dbm) *Model {
+	self.dbm = dbm
+	return self
 }
 
 func (self *Model) SetDoc(doc interface{}) {
@@ -76,7 +89,7 @@ func (self *Model) MergeDoc(docOld interface{}, docNew interface{}) error {
 		oldDocBson[field] = value
 	}
 	self.ReloadDoc(oldDocBson)
-	return DbmInstance.GetCollection(self.collectionName).UpdateId(ObjectIdHex(self.docId), self.doc)
+	return self.Dbm().GetCollection(self.collectionName).UpdateId(ObjectIdHex(self.docId), self.doc)
 }
 
 func (self *Model) FindAll(query Query, docs interface{}) (err error) {
@@ -96,6 +109,23 @@ func (self *Model) FindAll(query Query, docs interface{}) (err error) {
 	return mgoQuery.All(docs)
 }
 
+func (self *Model) Distinct(key string, query Query, docs interface{}) (err error) {
+	var mgoQuery *mgo.Query
+	if mgoQuery, err = self.getQueryByFields(query.QueryDoc); err != nil {
+		return err
+	}
+	if query.Skip > 0 {
+		mgoQuery.Skip(query.Skip)
+	}
+	if query.Limit > 0 {
+		mgoQuery.Limit(query.Limit)
+	}
+	if len(query.sortFields) > 0 {
+		mgoQuery.Sort(query.sortFields...)
+	}
+	return mgoQuery.Distinct(key, docs)
+}
+
 func (self *Model) FindOne(queryDoc interface{}, doc interface{}) (err error) {
 	var query *mgo.Query
 	if query, err = self.getQueryByFields(queryDoc); err != nil {
@@ -112,7 +142,7 @@ func (self *Model) Find(query interface{}) (*mgo.Query, error) {
 	if err := self.setValues(); err != nil {
 		return nil, err
 	}
-	return DbmInstance.Find(self.collectionName, query), nil
+	return self.Dbm().Find(self.collectionName, query), nil
 }
 
 func (self *Model) Count(queryDoc interface{}) (n int, err error) {
@@ -128,9 +158,9 @@ func (self *Model) Save() (err error) {
 		return err
 	}
 	if !self.isNew {
-		return DbmInstance.Update(self.collectionName, self.docId, self.doc)
+		return self.Dbm().Update(self.collectionName, self.docId, self.doc)
 	} else {
-		err = DbmInstance.Insert(self.collectionName, self.doc)
+		err = self.Dbm().Insert(self.collectionName, self.doc)
 		if err != nil {
 			return err
 		}
@@ -143,7 +173,7 @@ func (self *Model) Delete() (err error) {
 	if err := self.setValues(); err != nil {
 		return err
 	}
-	return DbmInstance.Delete(self.collectionName, self.docId, self.doc)
+	return self.Dbm().Delete(self.collectionName, self.docId, self.doc)
 }
 
 func (self *Model) getQueryByFields(queryDoc interface{}) (*mgo.Query, error) {
@@ -158,7 +188,7 @@ func (self *Model) getQueryByFields(queryDoc interface{}) (*mgo.Query, error) {
 	if query, err = docToBson(queryDoc); err != nil {
 		return nil, err
 	}
-	return DbmInstance.Find(self.collectionName, query), nil
+	return self.Dbm().Find(self.collectionName, query), nil
 }
 
 func docToBson(doc interface{}) (bsonData bson.M, err error) {
